@@ -75,13 +75,56 @@ downstream referenced those cells.
 Columns: date, season, home/away team, score, goals, division, tier, result. No missing
 values.
 
-Four tiers matters: promoted clubs enter the Premier League carrying a rating earned in the
-Championship rather than a cold start. This was a real gap in the Excel model, where promoted
-sides received no season blending at all.
+The modelling pipeline retains the top two tiers so promoted clubs enter the Premier League
+with Championship history rather than a cold start. A calibrated promotion adjustment is still
+required before those ratings can be compared directly with established Premier League clubs.
 
-**FiveThirtyEight SPI feed** (from the original workbook) — ~1,900 fixtures with xG and
-non-shot xG. This is the only xG source, covering roughly 20% of the modelling window. The
-`spi1`/`spi2` columns also serve as a free external benchmark.
+### Data update
+
+`update_data.py` builds three modelling inputs using only the Python standard library:
+
+- `data/england_top2_results.csv` — tier 1 and tier 2 results downloaded from
+  [seanelvidge/England-football-results](https://github.com/seanelvidge/England-football-results).
+- `data/epl_xg.csv` — completed Premier League matches with Understat home/away xG and a stable
+  source match ID.
+- `data/football_data_odds.csv` — free Premier League and Championship 1X2 odds from
+  [Football-Data.co.uk](https://www.football-data.co.uk/englandm.php), normalised across changing
+  historical schemas and reconciled to the results source.
+
+Run this from the repository root to download every source season again and completely rebuild
+all three output files:
+
+```bash
+python3 update_data.py
+```
+
+For a quicker weekly refresh that downloads the complete results source but only the current xG
+and odds seasons, use:
+
+```bash
+python3 update_data.py --incremental
+```
+
+The included GitHub Actions workflow runs incremental mode every Tuesday at 06:17 UTC and can
+also be started manually from the repository's Actions tab. It commits only validated changes.
+The complete rebuild covers Understat from 2014/15 onward and historical odds from 2000/01.
+
+For odds backtesting, `MarketH`, `MarketD`, and `MarketA` form one coherent market selected in
+this order: closing market average, closing Pinnacle, closing Bet365, pre-closing market average,
+pre-closing Bet365, then the mean of complete bookmaker triplets in the earliest files.
+`MarketSource` records which was used. `FairH`, `FairD`, and `FairA` are
+the corresponding probabilities after proportional removal of the bookmaker overround. Maximum
+odds are retained for attainable-price experiments but are never mixed into benchmark probabilities,
+because the three maxima may come from different bookmakers.
+
+Downloads are checked for schema changes, invalid scores, duplicates, incomplete result history,
+and disagreements between Understat and the results source. Output files are replaced atomically
+only after every check succeeds. Understat is an unofficial scraped source, so its interface may
+change; a failed update deliberately leaves the last valid files untouched.
+
+**FiveThirtyEight SPI feed** (from the original workbook) — a legacy set of ~1,900 fixtures with
+xG, non-shot xG, and external `spi1`/`spi2` ratings, covering 2016/17–2020/21. The maintained xG
+source is now Understat.
 
 ---
 
